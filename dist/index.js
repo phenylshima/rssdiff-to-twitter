@@ -19730,10 +19730,10 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports2.error = error;
-    function warning(message, properties = {}) {
+    function warning2(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports2.warning = warning;
+    exports2.warning = warning2;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
@@ -33310,8 +33310,21 @@ async function tweetRssDiff(rssPaths2, twitterTokens2) {
   const parser = new import_rss_parser.default();
   const oldRss = await parseRss(parser, rssPaths2.oldRssPath);
   const newRss = await parseRss(parser, rssPaths2.newRssPath);
-  const oldEntries = new Set(oldRss.items.map((item) => item.link));
-  const posts = newRss.items.filter((item) => !oldEntries.has(item.link)).map((entry) => `${entry.title} ${entry.link}`);
+  const oldIdent = oldRss.items.map(generateIdents).reduce(
+    (acc, idents) => {
+      idents.forEach((ident) => acc.add(ident));
+      return acc;
+    },
+    /* @__PURE__ */ new Set()
+  );
+  const posts = newRss.items.filter((item) => {
+    const idents = generateIdents(item);
+    if (idents.length === 0) {
+      core2.warning(`Skipping entry with no identifiers: ${item.title} ${item.link}`);
+      return false;
+    }
+    return !idents.some((ident) => oldIdent.has(ident));
+  }).map((entry) => `${entry.title} ${entry.link}`);
   if (posts.length === 0) {
     core2.info("No new entry found.");
     return;
@@ -33331,6 +33344,20 @@ async function tweetRssDiff(rssPaths2, twitterTokens2) {
 async function parseRss(parser, filePath) {
   const data = import_fs.default.readFileSync(filePath, "utf8");
   return await parser.parseString(data);
+}
+function generateIdents(item) {
+  const result = [];
+  const dateString = item.pubDate && new Date(item.pubDate).toDateString();
+  if (dateString && typeof item.link === "string") {
+    result.push(`DateLink;;;${dateString};;;${item.link}`);
+  }
+  if (dateString && typeof item.title === "string") {
+    result.push(`DateTitle;;;${dateString};;;${item.title}`);
+  }
+  if (typeof item.link === "string" && typeof item.title === "string") {
+    result.push(`LinkTitle;;;${item.link};;;${item.title}`);
+  }
+  return result;
 }
 
 // src/index.ts
